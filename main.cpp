@@ -21,6 +21,7 @@ int main(int argc, char** argv) {
 	
 	Game g(AABB({-20,-20}, {20,20}));
 	float sim_speed = 1;
+	bool paused = false;
 	Viewport cam = {0,0, WINDOW_ZOOM, WINDOW_WIDTH,WINDOW_HEIGHT};
 	debug_log log;
 	sim_params param(log);
@@ -46,6 +47,7 @@ int main(int argc, char** argv) {
 		#define Rel(key) IsKeyReleased(key)
 		if (Rel(KEY_COMMA)) sim_speed *= 0.5;
 		if (Rel(KEY_PERIOD)) sim_speed *= 2;
+		if (Rel(KEY_SPACE)) paused = !paused;
 		
 		//parameter mode
 		if (Rel(KEY_F1)) param_mode = param_mode ? '\0' : '-';
@@ -66,7 +68,8 @@ int main(int argc, char** argv) {
 		}
 		
 		//Simulation
-		g.Update(param, dt * sim_speed);
+		if (!paused)
+			g.Update(param, dt * sim_speed);
 		
 		//Rendering
 		BeginDrawing();
