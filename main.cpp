@@ -19,7 +19,7 @@ int main(int argc, char** argv) {
 	InitTextures();
 	Font font = LoadFontEx("Fonts/DroidSansMono.ttf", 32, nullptr, 0);
 	
-	Game g;
+	Game g(AABB({-20,-20}, {20,20}));
 	float sim_speed = 1;
 	Viewport cam = {0,0, WINDOW_ZOOM, WINDOW_WIDTH,WINDOW_HEIGHT};
 	debug_log log;
@@ -50,17 +50,23 @@ int main(int argc, char** argv) {
 		//parameter mode
 		if (Rel(KEY_F1)) param_mode = param_mode ? '\0' : '-';
 		if (param_mode && Rel(KEY_ESCAPE)) param_mode = '-';
-		if (param_mode == '-') {
-			if (Rel(KEY_C)) param_mode = 'c';
-		}
-		if (param_mode == 'c') {
-			if (Rel(KEY_ONE)) param.show_colliders = !param.show_colliders;
-			if (Rel(KEY_TWO)) param.show_grid = !param.show_grid;
-			if (Rel(KEY_THREE)) param.show_grid_colliders = !param.show_grid_colliders;
+		switch (param_mode) {
+			case '-':
+				if (Rel(KEY_C)) param_mode = 'c';
+				else if (Rel(KEY_F)) param_mode = 'f';
+				break;
+			case 'c':
+				if (Rel(KEY_ONE)) param.show_colliders = !param.show_colliders;
+				if (Rel(KEY_TWO)) param.show_grid = !param.show_grid;
+				if (Rel(KEY_THREE)) param.show_grid_colliders = !param.show_grid_colliders;
+				break;
+			case 'f':
+				if (Rel(KEY_ONE)) param.allow_splitting = !param.allow_splitting;
+				break;
 		}
 		
 		//Simulation
-		g.Update(dt * sim_speed);
+		g.Update(param, dt * sim_speed);
 		
 		//Rendering
 		BeginDrawing();

@@ -8,7 +8,6 @@
 #include <memory>
 #include <raylib.h>
 #include <cstdlib>
-#include <iostream>
 #include <vector>
 
 
@@ -50,10 +49,18 @@ AABB Viewport::GetAABB(void) const {
 	);
 }
 
+std::pair<float, float> Viewport::ToScreen(float x, float y) const {
+	return {
+		(x - this->x) * zoom + w * 0.5,
+		(y - this->y) * zoom + h * 0.5
+	};
+}
+
 
 uint64_t Game::AddMote(MotePtr m) {
 	motes[next_id] = m;
 	grid.Insert(next_id, m->GetAABB());
+	if (m->IsAttractor()) attractors[next_id] = m;
 	return next_id++;
 }
 
@@ -69,22 +76,19 @@ MotePtr Game::GetMote(uint64_t id) const {
 void Game::RemoveMote(uint64_t id) {
 	motes.erase(id);
 	grid.Remove(id);
+	attractors.erase(id);
 	// std::cout << "Removed " << id << std::endl;
 }
 
 void RenderAABB(const Viewport& view, AABB bb) {
-	int Ax = (bb.A.x - view.x) * view.zoom + view.w / 2.;
-	int Ay = (bb.A.y - view.y) * view.zoom + view.h / 2.;
-	int Bx = (bb.B.x - view.x) * view.zoom + view.w / 2.;
-	int By = (bb.B.y - view.y) * view.zoom + view.h / 2.;
+	auto [Ax, Ay] = view.ToScreen(bb.A.x, bb.A.y);
+	auto [Bx, By] = view.ToScreen(bb.B.x, bb.B.y);
 	DrawRectangleLines(Ax, Ay, Bx - Ax, By - Ay, WHITE);
 }
 
 void RenderAABBFilled(const Viewport& view, AABB bb, Color clr) {
-	float Ax = (bb.A.x - view.x) * view.zoom + view.w / 2.;
-	float Ay = (bb.A.y - view.y) * view.zoom + view.h / 2.;
-	float Bx = (bb.B.x - view.x) * view.zoom + view.w / 2.;
-	float By = (bb.B.y - view.y) * view.zoom + view.h / 2.;
+	auto [Ax, Ay] = view.ToScreen(bb.A.x, bb.A.y);
+	auto [Bx, By] = view.ToScreen(bb.B.x, bb.B.y);
 	DrawRectangleV({Ax, Ay}, {Bx - Ax, By - Ay}, clr);
 }
 
@@ -152,7 +156,7 @@ bool Game::CheckSurface(const MotePtr m, vec2& norm, float& dist) {
 	return false;
 }
 
-void Game::Update(const float& dt) {
+void Game::Update(const sim_params& param, const float& dt) {
 	std::vector<uint64_t> mote_list;
 	mote_list.reserve(motes.size());
 	for (const auto& [id, m] : motes)
@@ -163,7 +167,11 @@ void Game::Update(const float& dt) {
 		const MotePtr m = GetMote(id);
 		if (m == nullptr) continue;
 		
-		const MoteAction act = m->Update(dt);
+		for (const auto& [a_id, a] : attractors)
+			if (id != a_id)
+				m->AttractTowards(a, dt);
+		
+		const MoteAction act = m->Update(param, dt);
 		vec2 norm;
 		float dist;
 		if (CheckSurface(m, norm, dist))
@@ -180,8 +188,8 @@ void Game::Update(const float& dt) {
 				m->radius = r1;
 				
 				//calculate velocities
-				new_m.vel = m->vel + act.split_dir;
-				m->vel -= act.split_dir * (act.split_amount / (1 - act.split_amount));
+				new_m.vel = m->vel + act.split_dir * SPLIT_VELOCITY;
+				m->vel -= act.split_dir * SPLIT_VELOCITY * (act.split_amount / (1 - act.split_amount));
 				
 				MotePtr nm = std::make_shared<Mote>(new_m);
 				mote_list.push_back(AddMote(nm));
@@ -213,27 +221,31 @@ void Game::Update(const float& dt) {
 		total_area += m->radius * m->radius;
 }
 
-Game::Game() : next_id(1), grid(AABB({-6,-4}, {6,4})), bounds({-6,-4}, {6,4}) {
-	Mote m(vec2(0, 0), 0.5);
-	m.vel = {1.23, 2};
-	uint64_t m_id = AddMote(std::make_shared<Mote>(m));
+Game::Game(const AABB bb) : next_id(1), grid(bb), bounds(bb) {
+	AttractorMote m(vec2(0, 0), 1.5);
+	m.vel = {0,0};
+	uint64_t m_id = AddMote(std::make_shared<AttractorMote>(m));
 }
 
 
 // Mote functions
 
-MoteAction Mote::Update(const float& dt) {
+MoteAction Mote::Update(const sim_params& param, const float& dt) {
 	MoteAction act;
-	if (split_cooldown > 0) split_cooldown -= dt;
 	
 	pos += vel * dt;
-	vel = vel * powf(0.9, dt);
+	// vel = vel * powf(0.9, dt);
 	
-	const float w = radius * radius * 10000;
-	if (rand_float() < dt * exp(w)*w/M_E && split_cooldown <= 0) {
-		const float q = rand_float(0, 2*M_PI);
-		act.Split(vec2(cos(q), sin(q)), 0.35);
-		split_cooldown = SPLIT_COOLDOWN;
+	if (split_cooldown > 0) {
+		split_cooldown -= dt;
+	} else if (param.allow_splitting) {
+		float split_k = fminf(powf(radius / this->GetCriticalRadius(), 8), 1.);
+		const float split_chance = 1. - powf(1 - split_k, dt);
+		if (rand_float() <= split_chance) {
+			const float q = rand_float(0, 2*M_PI);
+			act.Split(vec2(cos(q), sin(q)), 0.25);
+			split_cooldown = SPLIT_COOLDOWN;
+		}
 	}
 	return act;
 }
@@ -242,7 +254,7 @@ void Mote::CollideSurface(const vec2& normal, const float& dist) {
 	pos += normal * dist;
 	if (vel.dot(normal) >= 0) return;
 	vel -= normal * 2 * vel.dot(normal);
-	vel = vel * 0.9;
+	// vel = vel * 0.9;
 }
 
 void Mote::CollideMote(Mote* m) {
@@ -270,6 +282,16 @@ void Mote::CollideMote(Mote* m) {
 	vel = vel * k + m->vel * (1-k);
 }
 
+void Mote::AttractTowards(const MotePtr& m, const float& dt) {
+	const float gravity = GRAVITY_CONSTANT * dt;
+	const vec2 delta = m->pos - pos;
+	const float dist2 = delta.length2();
+	const vec2 dir = delta.normalized() * gravity / dist2;
+	
+	vel += dir * (m->radius * m->radius);
+	m->vel -= dir * (radius * radius);
+}
+
 void RenderCircleTex(const float x, const float y, const float r, const float rot, const texture_id id) {
 	const Texture2D tx = tex[id];
 	const float scale = tex_scalars[id];
@@ -280,12 +302,24 @@ void RenderCircleTex(const float x, const float y, const float r, const float ro
 	DrawTexturePro(tx, src, dst, origin, rot, WHITE);
 }
 
+void Mote::RenderExtra(const float& x, const float& y, const float& r, const sim_params& param) const {
+	if (param.show_colliders) DrawCircleLines(static_cast<int>(round(x)), static_cast<int>(round(y)), r, WHITE);
+}
+
 void Mote::Render(const Viewport& view, sim_params& param, const float time) const {
 	//screen coordinates
-	float x = (pos.x - view.x) * view.zoom + view.w / 2.;
-	float y = (pos.y - view.y) * view.zoom + view.h / 2.;
-	float r = radius * view.zoom;
+	const auto [x, y] = view.ToScreen(pos.x, pos.y);
+	const float r = radius * view.zoom;
+	
+	RenderCircleTex(x, y, r, 0, TEXTURE_AMBIENT);
+	RenderExtra(x, y, r, param);
+}
+
+void AttractorMote::Render(const Viewport& view, sim_params& param, const float time) const {
+	//screen coordinates
+	const auto [x, y] = view.ToScreen(pos.x, pos.y);
+	const float r = radius * view.zoom;
 	
 	RenderCircleTex(x, y, r, 0, TEXTURE_ATTRACTOR);
-	if (param.show_colliders) DrawCircleLines(static_cast<int>(round(x)), static_cast<int>(round(y)), r, WHITE);
+	RenderExtra(x, y, r, param);
 }
