@@ -11,7 +11,7 @@ endif
 SRCS = common.cpp collision.cpp game.cpp
 HEADERS = common.hpp collision.hpp
 OBJS = $(SRCS:.cpp=.o)
-TARGET = out
+TARGET = osmosim
 
 #make sure you extract the win64_mingw-w64.zip raylib release as raylib/
 ifdef MINGW
