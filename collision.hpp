@@ -98,10 +98,10 @@ struct GridLocation {
 	AABB GetAABB(AABB space) const;
 };
 
-std::tuple<int,int,int,int> GetGridBounds(AABB bb, uint depth);
+std::tuple<int,int,int,int> GetGridBounds(AABB bb, int depth);
 
 //implements an NxN grid over an AABB 
-template <typename key, uint depth>
+template <typename key, int depth>
 class Grid {
 public:
 	const AABB bounds;
@@ -162,7 +162,7 @@ public:
 	}
 	
 	Grid(AABB bb) : bounds(bb) {
-		for (uint i = 0; i <= depth; i++) {
+		for (int i = 0; i <= depth; i++) {
 			grid[i].resize(1 << (2*i));
 		}
 	}

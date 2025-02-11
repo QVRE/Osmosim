@@ -73,7 +73,7 @@ AABB Line::GetAABB(void) const {
 }
 
 
-std::tuple<int,int,int,int> GetGridBounds(AABB bb, uint depth) {
+std::tuple<int,int,int,int> GetGridBounds(AABB bb, int depth) {
 	int w = 1 << depth;
 	int sx = std::min(std::max(static_cast<int>(bb.A.x * w), 0), w-1);
 	int sy = std::min(std::max(static_cast<int>(bb.A.y * w), 0), w-1);

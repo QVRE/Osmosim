@@ -13,10 +13,12 @@ HEADERS = common.hpp collision.hpp
 OBJS = $(SRCS:.cpp=.o)
 TARGET = out
 
+#make sure you extract the win64_mingw-w64.zip raylib release as raylib/
 ifdef MINGW
 	CXX = x86_64-w64-mingw32-g++
-	CXXFLAGS := $(CXXFLAGS) -Iraylib/src -Lraylib/src
-	LIBS := $(LIBS) -static
+	CXXFLAGS += -Iraylib/include -Lraylib/lib
+	LIBS += -static -lkernel32 -lgdi32 -luser32 -lwinmm
+	TARGET := $(addsuffix .exe,$(TARGET))
 endif
 
 
