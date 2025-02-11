@@ -11,7 +11,7 @@ using namespace std;
 
 int main(int argc, char** argv) {
 	SetConfigFlags(FLAG_WINDOW_RESIZABLE);
-	InitWindow(WINDOW_WIDTH, WINDOW_HEIGHT, "Mold Osmos");
+	InitWindow(WINDOW_WIDTH, WINDOW_HEIGHT, "Osmosim");
 	// ToggleBorderlessWindowed();
 	SetExitKey(KEY_Q);
 	SetTargetFPS(60);
